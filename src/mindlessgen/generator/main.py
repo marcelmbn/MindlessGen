@@ -219,6 +219,36 @@ def single_molecule_generator(
         if config.refine.debug:
             stop_event.set()
 
+    # additional GP3 engine after refinement and before postprocessing
+    gp3 = GP3(get_gp3_path())
+    gp3_failure: bool = False
+    try:
+        # check HL gap with GP3
+        if not gp3.check_gap(
+            optimized_molecule, 1.5, config.general.verbosity
+        ):  # 1.5 eV is a hard-coded threshold
+            if config.general.verbosity > 0:
+                print("-" * 24 + " g-xTB failed " + "-" * 25)
+                print(f"g-xTB HL gap below threshold for cycle {cycle + 1}.")
+                print("-" * 60)
+            gp3_failure = True
+    except (RuntimeError, ValueError) as e:
+        gp3_failure = True
+        if config.general.verbosity > 0:
+            print("-" * 24 + " g-xTB failed " + "-" * 25)
+            print(f"Gap check failed for cycle {cycle + 1}.")
+            print("-" * 60)
+            if config.general.verbosity > 1 or config.refine.debug:
+                print(e)
+    if gp3_failure:
+        gp3_fail_file = "g-xTB_fail_" + optimized_molecule.name + ".xyz"
+        print("-" * 24 + " g-xTB failed " + "-" * 25)
+        print(f"Development test for g-xTB method failed for cycle {cycle + 1}.")
+        print(f"Dumping failing molecule to file '{gp3_fail_file}'.")
+        print("-" * 60)
+        # dumping molecule for debugging purposes
+        optimized_molecule.write_xyz_to_file(gp3_fail_file)
+
     if config.general.postprocess:
         try:
             optimized_molecule = postprocess_mol(
